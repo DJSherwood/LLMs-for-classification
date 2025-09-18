@@ -10,4 +10,4 @@ The data is pulled from https://github.com/openscriptures/morphhb/blob/master/ox
 # Code
 The code is only slightly modified from the example code provided by Sebastian Raschka's _Building LLMs from Scratch_ repository:
 https://github.com/rasbt/LLMs-from-scratch
-Please do not sue me. :) 
+
