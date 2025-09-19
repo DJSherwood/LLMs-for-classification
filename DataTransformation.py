@@ -67,3 +67,6 @@ display_df = final_df.filter(
 )
 # print(display_df)
 print(f"The Tokens: {display_df[0, "Token"]} Represent the words: {display_df[0, "HebrewWord"]}")
+
+# to do
+# need to add the label for which editor is associated with each passage ( for fine-tuning )
