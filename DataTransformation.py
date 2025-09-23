@@ -1,6 +1,6 @@
 import polars as pl
-from typing import List, Tuple
 import re
+import torch
 
 # static
 def parse_passages(passage_dict):
@@ -129,6 +129,12 @@ class DataTransformation:
 
         return self.df
 
+    def convert_to_torch(self, column_name='Token'):
+        flat_list = [item for sublist in self.df[column_name].to_list() for item in sublist]
+        flat_tensor = torch.tensor(flat_list, dtype=torch.long)
+
+        return flat_tensor
+
 if __name__ == "__main__":
     # define passages to transform
     passages = {
@@ -150,8 +156,6 @@ if __name__ == "__main__":
     # Step through the procedure
     dt = DataTransformation(file_name='wlc.txt',passages=passages)
     dt.initial_transform()
-    dt.assign_editors()
-    q = dt.df.filter(
-        pl.col("editor").is_not_null()
-    )
-    print(q)
+    print(dt.final_df.select(pl.col("Token").n_unique()))
+    #dt.assign_editors()
+    #ft = dt.convert_to_torch(column_name='Token')

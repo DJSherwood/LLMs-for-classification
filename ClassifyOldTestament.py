@@ -6,15 +6,17 @@ import torch.nn as nn
 
 import matplotlib.pyplot as plt
 import urllib.request
+import DataTransformation
 
+# import tiktoken
 
 class GPTDatasetV1(Dataset):
-    def __init__(self, txt, tokenizer, max_length, stride):
+    def __init__(self, token_ids, max_length, stride):
         self.input_ids = []
         self.target_ids = []
 
         # Tokenize the entire text
-        token_ids = tokenizer.encode(txt, allowed_special={'<|endoftext|>'})
+        # token_ids = tokenizer.encode(txt, allowed_special={'<|endoftext|>'})
 
         # Use a sliding window to chunk the book into overlapping sequences of max_length
         for i in range(0, len(token_ids) - max_length, stride):
@@ -29,14 +31,15 @@ class GPTDatasetV1(Dataset):
     def __getitem__(self, idx):
         return self.input_ids[idx], self.target_ids[idx]
 
-def create_dataloader(txt, batch_size=4, max_length=256, stride=128, shuffle=True, drop_last=True, num_workers=0):
+def create_dataloader(token_ids, batch_size=4, max_length=256, stride=128, shuffle=True, drop_last=True, num_workers=0):
     # Initialize the tokenizer
     # maybe I do not really need the tokenizer
     # tokenizer = tiktoken.get_encoding("gpt2")
 
     # Create datatset
-    # dataset = GPTDatasetV1(txt, tokenizer, max_length, stride)
-    dataset = GPTDatasetV1(txt, max_length, stride)
+    dataset = GPTDatasetV1(token_ids, max_length, stride)
+    # here is where I want the data tensor to enter
+
 
     # Create dataloader
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=num_workers)
@@ -211,14 +214,14 @@ def generate_text_simple(model, idx, max_new_tokens, context_size):
 
     return idx
 
-def text_to_token_ids(text, tokenizer):
-    encoded = tokenizer.encode(text)
-    encoded_tensor = torch.tensor(encoded).unsqueeze(0) # add batch dimension
-    return encoded_tensor
+# def text_to_token_ids(text, tokenizer):
+#     encoded = tokenizer.encode(text)
+#     encoded_tensor = torch.tensor(encoded).unsqueeze(0) # add batch dimension
+#     return encoded_tensor
 
-def token_ids_to_text(token_ids, tokenizer):
-    flat = token_ids.squeeze(0)
-    return tokenizer.decode(flat.tolist())
+# def token_ids_to_text(token_ids, tokenizer):
+#     flat = token_ids.squeeze(0)
+#     return tokenizer.decode(flat.tolist())
 
 def calc_loss_batch(input_batch, target_batch, model, device):
     input_batch, target_batch = input_batch.to(device), target_batch.to(device)
@@ -250,19 +253,19 @@ def evaluate_model(model, train_loader, val_loader, device, eval_iter):
     model.train()
     return train_loss, val_loss
 
-def generate_and_print_sample(model, tokenizer, device, start_context):
-    model.eval()
-    context_size = model.pos_emb.weight.shape[0]
-    encoded = text_to_token_ids(start_context, tokenizer).to(device)
-    with torch.no_grad():
-        token_ids = generate_text_simple(
-            model=model, idx=encoded, max_new_tokens=50, context_size=context_size
-        )
-        decoded_text = token_ids_to_text(token_ids, tokenizer)
-        print(decoded_text.replace("\n"," ")) # compact print format
-    model.train()
+# def generate_and_print_sample(model, tokenizer, device, start_context):
+#     model.eval()
+#     context_size = model.pos_emb.weight.shape[0]
+#     encoded = text_to_token_ids(start_context, tokenizer).to(device)
+#     with torch.no_grad():
+#         token_ids = generate_text_simple(
+#             model=model, idx=encoded, max_new_tokens=50, context_size=context_size
+#         )
+#         decoded_text = token_ids_to_text(token_ids, tokenizer)
+#         print(decoded_text.replace("\n"," ")) # compact print format
+#     model.train()
 
-def train_model_simple(model, train_loader, val_loader, optimizer, device, num_epochs, eval_freq, eval_iter, start_context, tokenizer):
+def train_model_simple(model, train_loader, val_loader, optimizer, device, num_epochs, eval_freq, eval_iter, start_context):
     # Initialize lists to track losses and tokens seen
     train_losses, val_losses, track_tokens_seen = [], [], []
     tokens_seen = 0
@@ -290,7 +293,7 @@ def train_model_simple(model, train_loader, val_loader, optimizer, device, num_e
                       f"Train loss {train_loss:.3f}, Val loss {val_loss:.3f}")
 
         # print a sample text after each epoch
-        generate_and_print_sample(model, tokenizer, device, start_context)
+        # generate_and_print_sample(model, tokenizer, device, start_context)
 
     return train_losses, val_losses, track_tokens_seen
 
@@ -318,17 +321,40 @@ def main(gpt_config, settings):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # download data if necessary
-    file_path = "the-verdict.txt"
-    url = "https://raw.githubusercontent.com/rasbt/LLMs-from-scratch/main/ch02/01_main-chapter-code/the-verdict.txt"
+    # file_path = "the-verdict.txt"
+    # url = "https://raw.githubusercontent.com/rasbt/LLMs-from-scratch/main/ch02/01_main-chapter-code/the-verdict.txt"
+    #
+    # if not os.path.exists(file_path):
+    #     with urllib.request.urlopen(url) as response:
+    #         text_data = response.read().decode('utf-8')
+    #     with open(file_path, "w", encoding="utf-8") as file:
+    #         file.write(text_data)
+    # else:
+    #     with open(file_path, "r", encoding="utf-8") as file:
+    #         text_data = file.read()
 
-    if not os.path.exists(file_path):
-        with urllib.request.urlopen(url) as response:
-            text_data = response.read().decode('utf-8')
-        with open(file_path, "w", encoding="utf-8") as file:
-            file.write(text_data)
-    else:
-        with open(file_path, "r", encoding="utf-8") as file:
-            text_data = file.read()
+    # define passages which correspond to specific editors
+    passages = {
+        "D": ["Deut 6", "Deut 12-13", "Deut 15-16", "Deut 18-19", "Deut 26", "Deut 28"],
+        "DH": ["Deut 8-11", "Deut 27", "Josh 1", "Josh 5", "Josh 6", "Josh 12", "Josh 23",
+               "Judg 2", "Judg 6", "2Sam 7", "1Kgs 8", "2Kgs 17:1-21", "2Kgs 22-25"],
+        "P": ["Gen 1:1-31", "Gen 2:1-3", "Gen 5:3-28", "Gen 5:30-32", "Gen 6:9-22", "Gen 9:1-17",
+              "Gen 6:28-29", "Gen 10:2-7", "Gen 10:20", "Gen 10:22-23", "Gen 10:31", "Gen 11:11-26",
+              "Gen 11:29-32", "Gen 12:5", "Gen 13:6", "Gen 13:12", "Gen 16:3", "Gen 16:15-16", "Gen 21:2-5",
+              "Gen 22:20-24", "Gen 23:1-20", "Gen 25:7-10", "Gen 25:13-17", "Gen 25:20", "Gen 26:20",
+              "Gen 26:34-35", "Gen 27:46", "Gen 28:1-9", "Gen 35:9-15", "Gen 35:27-29", "Gen 36:40-43",
+              "Gen 37:1", "Gen 46:6-7", "Gen 47:28", "Gen 49:29-33", "Gen 50:12-13", "Exod 1:1-4", "Exod 1:7",
+              "Exod 1:13-14", "Exod 2:23-25", "Exod 7:1-13", "Exod 7:19-22", "Exod 8:1-3", "Exod 8:11-15",
+              "Exod 9:8-12", "Exod 11:9-10", "Exod 12:40-42", "Exod 13:20", "Exod 14:1-4", "Exod 14:8-10",
+              "Exod 14:15-18", "Exod 14:21-23", "Exod 14:27-29", "Exod 15:22", "Exod 19:1", "Exod 24:16-17",
+              "Gen 17", "Exod 6", "Exod 16", "Exod 25-31", "Exod 35-40", "Lev 1-4", "Exod 8-9"]
+    }
+
+    # transform data
+    dt = DataTransformation.DataTransformation(file_name='wlc.txt', passages=passages)
+    dt.initial_transform()
+    dt.assign_editors()
+    token_data = dt.convert_to_torch(column_name='Token')
 
     # Initialize model
     model = GPTModel(gpt_config)
@@ -340,10 +366,10 @@ def main(gpt_config, settings):
     # Set up dataloaders
     # Train/validation ratio
     train_ratio = 0.90
-    split_idx = int(train_ratio * len(text_data))
+    split_idx = int(train_ratio * len(token_data))
 
     train_loader = create_dataloader(
-        text_data[:split_idx],
+        token_data[:split_idx],
         batch_size=settings["batch_size"],
         max_length=gpt_config["context_length"],
         stride=gpt_config["context_length"],
@@ -353,7 +379,7 @@ def main(gpt_config, settings):
     )
 
     val_loader = create_dataloader(
-        text_data[split_idx:],
+        token_data[split_idx:],
         batch_size=settings["batch_size"],
         max_length=gpt_config["context_length"],
         stride=gpt_config["context_length"],
@@ -363,12 +389,47 @@ def main(gpt_config, settings):
     )
 
     # train model
-    tokenizer = tiktoken.get_encoding("gpt2")
+    # tokenizer = tiktoken.get_encoding("gpt2")
 
     train_losses, val_losses, tokens_seen = train_model_simple(
         model, train_loader, val_loader, optimizer, device,
         num_epochs=settings["num_epochs"], eval_freq=5, eval_iter=1,
-        start_context="Every effort moves you", tokenizer=tokenizer
+        start_context="Every effort moves you",
+        # tokenizer=tokenizer
     )
 
     return train_losses, val_losses, tokens_seen, model
+
+if __name__ == "__main__":
+
+    GPT_CONFIG_124M = {
+        "vocab_size": 22703,  # this is the vocab size of the hebrew bible text
+        "context_length": 256,
+        "emb_dim": 768,
+        "n_heads": 8,
+        "n_layers": 6,
+        "drop_rate": 0.1,
+        "qkv_bias": False
+    }
+
+    OTHER_SETTINGS = {
+        "learning_rate": 5e-4,
+        "num_epochs": 5,
+        "batch_size": 2,
+        "weight_decay": 0.1
+    }
+
+    # initiate training
+    train_losses, val_losses, tokens_seen, model = main(GPT_CONFIG_124M, OTHER_SETTINGS)
+
+    # after training
+
+    # Plot results
+    epochs_tensor = torch.linspace(0, OTHER_SETTINGS["num_epochs"], len(train_losses))
+    plot_losses(epochs_tensor, tokens_seen, train_losses, val_losses)
+    plt.savefig("loss.pdf")
+
+    # Safe and load model
+    torch.save(model.state_dict(), "model.pth")
+    # model = GPTModel(GPT_CONFIG_124M)
+    # model.load_state_dict(torch.load("model.pth", weights_only=True))
