@@ -3,7 +3,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
-
 import matplotlib.pyplot as plt
 import urllib.request
 import DataTransformation

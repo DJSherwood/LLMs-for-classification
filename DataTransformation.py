@@ -45,7 +45,6 @@ class DataTransformation:
     def __init__(self, file_name='wlc.txt', passages=None):
         self.file_name = file_name
         self.passage_sets = parse_passages(passages)
-        self.final_df = None
         self.df = None
 
     def initial_transform(self):
@@ -109,10 +108,10 @@ class DataTransformation:
         ).agg(["HebrewWord"])
         # print(hebrew_word_list.collect())
 
-        self.final_df = token_list.join(hebrew_word_list, on=["Book", "Chapter", "Verse"]).sort(
+        self.df = token_list.join(hebrew_word_list, on=["Book", "Chapter", "Verse"]).sort(
             by=["Book", "Chapter", "Verse"]).collect()
 
-        return self.final_df
+        return self
 
     def get_editor(self, book, chapter, verse):
         for editor, refs in self.passage_sets.items():
@@ -121,14 +120,14 @@ class DataTransformation:
         return None
 
     def assign_editors(self):
-        self.df = self.final_df.with_columns([
+        self.df = self.df.with_columns([
             pl.struct(["Book", "Chapter", "Verse"]).map_elements(
                 lambda row: self.get_editor(row["Book"], row["Chapter"], row["Verse"]),
                 return_dtype=pl.Utf8
             ).alias("editor")
         ])
 
-        return self.df
+        return self
 
     def add_training_testing(self):
         # the trick is to make indexes
@@ -155,6 +154,24 @@ class DataTransformation:
                 pl.lit("train")
             ).alias("data_set")
         ).drop("editor_index")
+        # add numerical target
+        self.df = self.df.with_columns(
+            pl.when(
+                pl.col("data_set") == "train"
+            ).then(
+                pl.lit(0)
+            ).when(
+                pl.col("data_set") == "val"
+            ).then(
+                pl.lit(1)
+            ).when(
+                pl.col("data_set") == "test"
+            ).then(
+                pl.lit(2)
+            ).alias("label")
+        )
+
+        return self
 
         return self.df
 
