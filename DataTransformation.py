@@ -134,11 +134,13 @@ class DataTransformation:
         # the trick is to make indexes
         self.df = self.df.sort(by=["editor", "Book", "Chapter", "Verse"])
         # 1. First, add an index that resets for each editor to self.df
-        self.df = self.df.filter(
-            pl.col("editor").is_not_null()
-        ).with_columns([
-            pl.col("Token").cum_count().over("editor").alias("editor_index")
-        ]).with_columns(
+        self.df = self.df.with_columns(
+            pl.when(
+                pl.col("editor").is_not_null()
+            ).then(
+                pl.col("Token").cum_count().over("editor")
+            ).alias("editor_index")
+        ).with_columns(
             pl.when(
                 ( pl.col("editor_index") % 15 < 2 )
             ).then(
