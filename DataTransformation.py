@@ -1,3 +1,4 @@
+import numpy as np
 import polars as pl
 import re
 import torch
@@ -129,6 +130,32 @@ class DataTransformation:
 
         return self.df
 
+    def add_training_testing(self):
+        # the trick is to make indexes
+        self.df = self.df.sort(by=["editor", "Book", "Chapter", "Verse"])
+        # 1. First, add an index that resets for each editor to self.df
+        self.df = self.df.filter(
+            pl.col("editor").is_not_null()
+        ).with_columns([
+            pl.col("Token").cum_count().over("editor").alias("editor_index")
+        ]).with_columns(
+            pl.when(
+                ( pl.col("editor_index") % 15 < 2 )
+            ).then(
+                pl.lit("test")
+            ).when(
+                ( pl.col("editor_index") % 15 > 1 ) & ( pl.col("editor_index") % 15 < 5 )
+            ).then(
+                pl.lit("val")
+            ).when(
+                ( pl.col("editor_index") % 15 > 4 )
+            ).then(
+                pl.lit("train")
+            ).alias("data_set")
+        ).drop("editor_index")
+
+        return self.df
+
     def convert_to_torch(self, column_name='Token'):
         flat_list = [item for sublist in self.df[column_name].to_list() for item in sublist]
         flat_tensor = torch.tensor(flat_list, dtype=torch.long)
@@ -156,6 +183,8 @@ if __name__ == "__main__":
     # Step through the procedure
     dt = DataTransformation(file_name='wlc.txt',passages=passages)
     dt.initial_transform()
-    print(dt.final_df.select(pl.col("Token").n_unique()))
-    #dt.assign_editors()
+    # print(dt.final_df.select(pl.col("Token").n_unique()))
+    dt.assign_editors()
+    dt.add_training_testing()
+    print(dt.df)
     #ft = dt.convert_to_torch(column_name='Token')
