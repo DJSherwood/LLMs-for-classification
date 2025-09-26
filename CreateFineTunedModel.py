@@ -8,19 +8,44 @@ import urllib.request
 from DataTransformation import DataTransformation
 import polars as pl
 
+# this class takes a polars dataframe and makes a torch dataset
+# so this data is pre-filtered on editors
 class EditorDataset(Dataset):
-    def __init__(self, tokens_from_editors, max_length=35, pad_token_id=22704):
-        self.encoded_texts = tokens_from_editors
-        self.encoded_texts = [
-            encoded_text + [pad_token_id] * (max_length - len(encoded_text))
-            for encoded_text in self.encoded_texts
+    def __init__(self, polars_df, labels_column="data_set", max_length=None, pad_token_id=22704):
+        self.polars_df = polars_df
+        self.labels_column = labels_column
+        # get list of lists
+        self.tokens_list = [
+            item for sublist in self.polars_df["Token"].to_list() for item in sublist
+        ]
+        # pad sequences to max_length
+        if max_length is None:
+            self.max_length = self._longest_encoded_length()
+        else:
+            self.max_length = max_length
+
+        # oh, so 'line' is really a single token, and
+        # from the original example it is...a line?
+        self.tokens = [
+            line + [pad_token_id] * (max_length - len(line))
+            for line in self.tokens_list
         ]
 
     def __get__item__(self, index):
-        encoded = self.encoded_texts[index]
-        label = self.
+        encoded = self.tokens[index]
+        label = self.polars_df.select(pl.col(self.labels_column)).row(index)[0]
+        return (
+            torch.tensor(encoded, dtype=torch.long),
+            torch.tensor(label, dtype=torch.long)
+        )
 
-if __name__ is "__main__":
+    def __len__(self):
+        return len(self.tokens_list)
+
+    def _longest_encoded_length(self):
+        return max(len(line) for line in self.tokens_list)
+
+if __name__ == "__main__":
     passages = {
         "D": ["Deut 6", "Deut 12-13", "Deut 15-16", "Deut 18-19", "Deut 26", "Deut 28"],
         "DH": ["Deut 8-11", "Deut 27", "Josh 1", "Josh 5", "Josh 6", "Josh 12", "Josh 23",
@@ -41,6 +66,10 @@ if __name__ is "__main__":
     dt.initial_transform()
     dt.assign_editors()
     dt.add_training_testing()
-    flattened_tokens = dt.convert_to_torch(column_name='Token')
+    train_data = dt.df.filter(
+        pl.col("data_set") == "train"
+    ).select(["Token","label"])
 
     # Create datasets
+    train_dataset = EditorDataset(train_data, labels_column="label", max_length=35)
+    print(train_dataset.max_length)

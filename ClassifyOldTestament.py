@@ -37,8 +37,6 @@ def create_dataloader(token_ids, batch_size=4, max_length=256, stride=128, shuff
 
     # Create datatset
     dataset = GPTDatasetV1(token_ids, max_length, stride)
-    # here is where I want the data tensor to enter
-
 
     # Create dataloader
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=num_workers)

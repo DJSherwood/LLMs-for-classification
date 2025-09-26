@@ -205,5 +205,5 @@ if __name__ == "__main__":
     # print(dt.final_df.select(pl.col("Token").n_unique()))
     dt.assign_editors()
     dt.add_training_testing()
-    print(dt.df)
+    print(dt.df.group_by(["editor", "data_set"]).agg(pl.count()).slice(0, 2).select("count").tolist())
     #ft = dt.convert_to_torch(column_name='Token')
