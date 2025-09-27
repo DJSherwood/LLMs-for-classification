@@ -16,8 +16,9 @@ class EditorDataset(Dataset):
         self.labels_column = labels_column
         # get list of lists
         self.tokens_list = [
-            item for sublist in self.polars_df["Token"].to_list() for item in sublist
+            x for x in self.polars_df["Token"].to_list()
         ]
+        #
         # pad sequences to max_length
         if max_length is None:
             self.max_length = self._longest_encoded_length()
@@ -31,7 +32,7 @@ class EditorDataset(Dataset):
             for line in self.tokens_list
         ]
 
-    def __get__item__(self, index):
+    def __getitem__(self, index):
         encoded = self.tokens[index]
         label = self.polars_df.select(pl.col(self.labels_column)).row(index)[0]
         return (
@@ -69,7 +70,10 @@ if __name__ == "__main__":
     train_data = dt.df.filter(
         pl.col("data_set") == "train"
     ).select(["Token","label"])
+    print(train_data)
 
     # Create datasets
-    train_dataset = EditorDataset(train_data, labels_column="label", max_length=35)
-    print(train_dataset.max_length)
+    train_dataset = EditorDataset(train_data, labels_column="label", max_length=50)
+
+    print(f"Number of training samples: {len(train_dataset)}")
+    print(f"First training sample (tokens, label): {train_dataset[1]}")
